@@ -31,7 +31,7 @@ export function OutputLogs({ queryLogs, setQueryLogs }: QueryLogProps) {
           </Button>
         )}
       </div>
-      <ScrollArea className="h-32">
+      <ScrollArea className="h-32 overflow-auto">
         <div className="p-2 space-y-1">
           {queryLogs.length === 0 ? (
             <p className="text-xs text-[#A0AEC0] p-2">

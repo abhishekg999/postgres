@@ -1,4 +1,4 @@
-import { useDatabase } from "@/hooks/use-database";
+import { useDatabaseStore } from "@/store/database";
 import { HistoryItem, SavedQuery } from "@/types/types";
 import {
   Bookmark,
@@ -43,7 +43,7 @@ export function Sidebar({
   isCollapsed,
   toggleSidebar,
 }: SidebarProps) {
-  const { dbInitialized, isInitializing, runQuery } = useDatabase();
+  const { dbInitialized, isInitializing, runQuery } = useDatabaseStore();
 
   const handleSelectTable = (table: string) => {
     const query = `SELECT * FROM ${table} LIMIT 100`;

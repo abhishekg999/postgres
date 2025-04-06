@@ -4,7 +4,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useDatabase } from "@/hooks/use-database";
+import { useDatabaseStore } from "@/store/database";
 import { Play } from "lucide-react";
 import { useEffect } from "react";
 import { Button } from "./ui/button";
@@ -15,7 +15,7 @@ type HeaderProps = {
 };
 
 export function Header({ query, onRunQuery }: HeaderProps) {
-  const { dbInitialized, isExecuting, checkDbStatus } = useDatabase();
+  const { dbInitialized, isExecuting, checkDbStatus } = useDatabaseStore();
 
   useEffect(() => {
     checkDbStatus();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useDatabase } from "@/hooks/use-database";
+import { useDatabaseStore } from "@/store/database";
 import * as monaco from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -24,7 +24,7 @@ export default function Editor({
     null
   );
   const editorInitializedRef = useRef(false);
-  const { tableSchema } = useDatabase();
+  const { tableSchema } = useDatabaseStore();
 
   const handleChange = useCallback(
     (newValue: string) => {

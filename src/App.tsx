@@ -21,9 +21,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/toaster";
-import { useDatabase } from "@/hooks/use-database";
 import { useToast } from "@/hooks/use-toast";
 import { exportResultsToCSV } from "@/lib/utils";
+import { useDatabaseStore } from "@/store/database";
 import { HistoryItem, SavedQuery } from "@/types/types";
 import {
   Bookmark,
@@ -55,7 +55,7 @@ export default function SQLEditor() {
     []
   );
 
-  // Database hooks
+  // Database store
   const {
     isExecuting,
     tables,
@@ -64,12 +64,12 @@ export default function SQLEditor() {
     columns,
     setQueryLogs,
     dbInitialized,
-    runQuery: executeQuery,
-  } = useDatabase();
+    runQuery,
+  } = useDatabaseStore();
   const { toast } = useToast();
 
   // Functions
-  const runQuery = async (query: string) => {
+  const executeQuery = async (query: string) => {
     if (!dbInitialized) {
       toast({
         title: "Database not ready",
@@ -89,7 +89,7 @@ export default function SQLEditor() {
     }
 
     try {
-      const result = await executeQuery(query);
+      const result = await runQuery(query);
 
       if (!result) {
         toast({
@@ -371,7 +371,7 @@ export default function SQLEditor() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header query={query} onRunQuery={runQuery} />
+        <Header query={query} onRunQuery={executeQuery} />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Tabs
@@ -443,7 +443,7 @@ export default function SQLEditor() {
                   onChange={setQuery}
                   language="sql"
                   readOnly={isExecuting}
-                  onExecuteQuery={runQuery}
+                  onExecuteQuery={executeQuery}
                 />
               </div>
             </TabsContent>
