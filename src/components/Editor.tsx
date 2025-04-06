@@ -12,6 +12,29 @@ interface EditorProps {
   onExecuteQuery?: (query: string) => void;
 }
 
+monaco.editor.defineTheme("sqlTheme", {
+  base: "vs-dark",
+  inherit: true,
+  rules: [
+    { token: "keyword", foreground: "10B981", fontStyle: "bold" },
+    { token: "operator", foreground: "A0AEC0" },
+    { token: "string", foreground: "F59E0B" },
+    { token: "number", foreground: "3B82F6" },
+    { token: "comment", foreground: "6B7280", fontStyle: "italic" },
+    { token: "identifier", foreground: "E2E8F0" },
+  ],
+  colors: {
+    "editor.background": "#1A202C",
+    "editor.foreground": "#E2E8F0",
+    "editorCursor.foreground": "#10B981",
+    "editor.lineHighlightBackground": "#2D3748",
+    "editorLineNumber.foreground": "#6B7280",
+    "editor.selectionBackground": "#374151",
+    "editor.inactiveSelectionBackground": "#2D3748",
+    "editorIndentGuide.background": "#2D3748",
+  },
+});
+
 export default function Editor({
   value,
   onChange,
@@ -41,29 +64,6 @@ export default function Editor({
 
   useEffect(() => {
     if (!editorRef.current || editorInitializedRef.current) return;
-
-    monaco.editor.defineTheme("sqlTheme", {
-      base: "vs-dark",
-      inherit: true,
-      rules: [
-        { token: "keyword", foreground: "10B981", fontStyle: "bold" },
-        { token: "operator", foreground: "A0AEC0" },
-        { token: "string", foreground: "F59E0B" },
-        { token: "number", foreground: "3B82F6" },
-        { token: "comment", foreground: "6B7280", fontStyle: "italic" },
-        { token: "identifier", foreground: "E2E8F0" },
-      ],
-      colors: {
-        "editor.background": "#1A202C",
-        "editor.foreground": "#E2E8F0",
-        "editorCursor.foreground": "#10B981",
-        "editor.lineHighlightBackground": "#2D3748",
-        "editorLineNumber.foreground": "#6B7280",
-        "editor.selectionBackground": "#374151",
-        "editor.inactiveSelectionBackground": "#2D3748",
-        "editorIndentGuide.background": "#2D3748",
-      },
-    });
 
     monacoEditorRef.current = monaco.editor.create(editorRef.current, {
       value,
