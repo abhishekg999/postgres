@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useLocalStorage } from "react-use";
 
 import Editor from "@/components/Editor";
@@ -69,59 +69,65 @@ export default function SQLEditor() {
   const { toast } = useToast();
 
   // Functions
-  const executeQuery = async (query: string) => {
-    if (!dbInitialized) {
-      toast({
-        title: "Database not ready",
-        description: "Please wait for the database to initialize",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!query.trim()) {
-      toast({
-        title: "Empty query",
-        description: "Please enter a SQL query to execute",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const result = await runQuery(query);
-
-      if (!result) {
+  const executeQuery = useCallback(
+    async (query: string) => {
+      if (!dbInitialized) {
         toast({
-          title: "Query execution failed",
-          description: "No result returned from the database",
+          title: "Database not ready",
+          description: "Please wait for the database to initialize",
           variant: "destructive",
         });
         return;
       }
 
-      // Add to history
-      const newHistoryItem = {
-        id: Date.now().toString(),
-        query,
-        timestamp: Date.now(),
-      };
-
-      if (queryHistory) {
-        const updatedHistory = [newHistoryItem, ...queryHistory].slice(0, 100);
-        setQueryHistory(updatedHistory);
+      if (!query.trim()) {
+        toast({
+          title: "Empty query",
+          description: "Please enter a SQL query to execute",
+          variant: "destructive",
+        });
+        return;
       }
 
-      // Switch to results tab on success
-      if (result.status === "success") {
-        setActiveTab("results");
-      }
-    } catch (error) {
-      console.error("Query execution error:", error);
-    }
-  };
+      try {
+        const result = await runQuery(query);
 
-  const saveQuery = () => {
+        if (!result) {
+          toast({
+            title: "Query execution failed",
+            description: "No result returned from the database",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Add to history
+        const newHistoryItem = {
+          id: Date.now().toString(),
+          query,
+          timestamp: Date.now(),
+        };
+
+        if (queryHistory) {
+          const updatedHistory = [newHistoryItem, ...queryHistory].slice(
+            0,
+            100
+          );
+          setQueryHistory(updatedHistory);
+        }
+
+        // Switch to results tab on success
+        if (result.status === "success") {
+          setActiveTab("results");
+        }
+      } catch (error) {
+        console.error("Query execution error:", error);
+      }
+    },
+    [dbInitialized, runQuery, setQueryHistory, toast, queryHistory]
+  );
+
+  const saveQuery = useCallback(() => {
     if (!queryName.trim()) {
       toast({
         title: "Missing name",
@@ -149,39 +155,48 @@ export default function SQLEditor() {
       title: "Query saved",
       description: `"${queryName}" has been saved successfully`,
     });
-  };
+  }, [query, queryName, savedQueries, setSavedQueries, toast]);
 
-  const loadQuery = (savedQuery: SavedQuery) => {
-    setQuery(savedQuery.query);
-    setActiveTab("editor");
+  const loadQuery = useCallback(
+    (savedQuery: SavedQuery) => {
+      setQuery(savedQuery.query);
+      setActiveTab("editor");
 
-    toast({
-      title: "Query loaded",
-      description: `"${savedQuery.name}" has been loaded into the editor`,
-    });
-  };
+      toast({
+        title: "Query loaded",
+        description: `"${savedQuery.name}" has been loaded into the editor`,
+      });
+    },
+    [toast]
+  );
 
-  const loadHistoryQuery = (historyItem: HistoryItem) => {
-    setQuery(historyItem.query);
-    setActiveTab("editor");
+  const loadHistoryQuery = useCallback(
+    (historyItem: HistoryItem) => {
+      setQuery(historyItem.query);
+      setActiveTab("editor");
 
-    toast({
-      title: "Query loaded from history",
-      description: "Historical query has been loaded into the editor",
-    });
-  };
+      toast({
+        title: "Query loaded from history",
+        description: "Historical query has been loaded into the editor",
+      });
+    },
+    [toast]
+  );
 
-  const deleteQuery = (id: string) => {
-    const updatedQueries = savedQueries?.filter((q) => q.id !== id) || [];
-    setSavedQueries(updatedQueries);
+  const deleteQuery = useCallback(
+    (id: string) => {
+      const updatedQueries = savedQueries?.filter((q) => q.id !== id) || [];
+      setSavedQueries(updatedQueries);
 
-    toast({
-      title: "Query deleted",
-      description: "The saved query has been deleted",
-    });
-  };
+      toast({
+        title: "Query deleted",
+        description: "The saved query has been deleted",
+      });
+    },
+    [savedQueries, setSavedQueries, toast]
+  );
 
-  const exportResults = () => {
+  const exportResults = useCallback(() => {
     if (results.length === 0) {
       toast({
         title: "No results to export",
@@ -208,14 +223,14 @@ export default function SQLEditor() {
         variant: "destructive",
       });
     }
-  };
+  }, [results, toast]);
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     });
-  };
+  }, []);
 
   return (
     <div className="flex h-screen bg-[#111827]">

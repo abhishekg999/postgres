@@ -47,7 +47,7 @@ export default function Editor({
     null
   );
   const editorInitializedRef = useRef(false);
-  const { tableSchema } = useDatabaseStore();
+  const { tableSchema, dbInitialized } = useDatabaseStore();
 
   const handleChange = useCallback(
     (newValue: string) => {
@@ -57,10 +57,15 @@ export default function Editor({
   );
 
   const executeQuery = useCallback(() => {
-    if (onExecuteQuery && !readOnly && monacoEditorRef.current) {
+    if (
+      dbInitialized &&
+      onExecuteQuery &&
+      !readOnly &&
+      monacoEditorRef.current
+    ) {
       onExecuteQuery(monacoEditorRef.current.getValue());
     }
-  }, [onExecuteQuery, readOnly]);
+  }, [onExecuteQuery, readOnly, dbInitialized]);
 
   useEffect(() => {
     if (!editorRef.current || editorInitializedRef.current) return;
