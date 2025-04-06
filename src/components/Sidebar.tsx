@@ -46,8 +46,9 @@ export function Sidebar({
   const { dbInitialized, isInitializing, runQuery } = useDatabase();
 
   const handleSelectTable = (table: string) => {
-    setQuery(`SELECT * FROM ${table} LIMIT 100`);
-    runQuery(table);
+    const query = `SELECT * FROM ${table} LIMIT 100`;
+    setQuery(query);
+    runQuery(query);
   };
 
   return (
