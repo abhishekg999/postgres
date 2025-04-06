@@ -1,109 +1,82 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Toaster } from "@/components/ui/toaster"
-import { useToast } from "@/hooks/use-toast"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Play,
-  Save,
-  Database,
-  Clock,
-  Bookmark,
-  Download,
-  MoreVertical,
-  ChevronDown,
-  TableIcon,
-  FileText,
-  Terminal,
-  Copy,
-  Check,
-} from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import Editor from "@/components/editor"
-import ResultsTable from "@/components/results-table"
-import { initDB, executeQuery, getTableList, QueryResult } from "@/lib/db"
+import { useState } from "react";
 import { useLocalStorage } from "react-use";
 
-
-type SavedQuery = {
-  id: string
-  name: string
-  query: string
-}
-
-type HistoryItem = {
-  id: string
-  query: string
-  timestamp: number
-}
-
-type QueryLog = {
-  message: string
-  status: "success" | "error"
-  timestamp: number
-  duration?: number
-}
+import Editor from "@/components/Editor";
+import { Header } from "@/components/Header";
+import { OutputLogs } from "@/components/OutputLogs";
+import ResultsTable from "@/components/ResultsTable";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/toaster";
+import { useDatabase } from "@/hooks/use-database";
+import { useToast } from "@/hooks/use-toast";
+import { exportResultsToCSV } from "@/lib/utils";
+import { HistoryItem, SavedQuery } from "@/types/types";
+import {
+  Bookmark,
+  Check,
+  Clock,
+  Copy,
+  Database,
+  Download,
+  FileText,
+  TableIcon,
+} from "lucide-react";
 
 export default function SQLEditor() {
-  const [query, setQuery] = useState("SELECT * FROM users")
-  const [results, setResults] = useState<QueryResult["rows"]>([])
-  const [columns, setColumns] = useState<string[]>([])
-  const [isExecuting, setIsExecuting] = useState(false)
-  const [activeTab, setActiveTab] = useState("editor")
-  const [resultsTab, setResultsTab] = useState("table")
+  // UI state
+  const [activeTab, setActiveTab] = useState("editor");
+  const [resultsTab, setResultsTab] = useState("table");
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [queryName, setQueryName] = useState("");
 
-  const [savedQueries, setSavedQueries] = useLocalStorage<SavedQuery[]>('savedQueries', []);
-  const [queryHistory, setQueryHistory] = useLocalStorage<HistoryItem[]>('queryHistory', []);
-  
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
-  const [queryName, setQueryName] = useState("")
-  const [dbInitialized, setDbInitialized] = useState(false)
-  const [tables, setTables] = useState<string[]>([])
-  const [queryLogs, setQueryLogs] = useState<QueryLog[]>([])
-  const [copySuccess, setCopySuccess] = useState(false)
-  const { toast } = useToast()
+  // Query state
+  const [query, setQuery] = useState("SELECT * FROM users");
+  const [savedQueries, setSavedQueries] = useLocalStorage<SavedQuery[]>(
+    "savedQueries",
+    []
+  );
+  const [queryHistory, setQueryHistory] = useLocalStorage<HistoryItem[]>(
+    "queryHistory",
+    []
+  );
 
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        await initDB()
-        setDbInitialized(true)
-        setTables(await getTableList())
+  // Database hooks
+  const {
+    isExecuting,
+    tables,
+    queryLogs,
+    results,
+    columns,
+    setQueryLogs,
+    dbInitialized,
+    runQuery: executeQuery,
+  } = useDatabase();
+  const { toast } = useToast();
 
-        toast({
-          title: "Database connected",
-          description: "Ready to execute SQL queries",
-        })
-      } catch (error) {
-        console.error("Failed to initialize database:", error)
-        toast({
-          title: "Database connection failed",
-          description: "Could not connect to the database",
-          variant: "destructive",
-        })
-      }
-    }
-
-    initialize()
-  }, [toast])
-
-  const runQuery = async () => {
+  // Functions
+  const runQuery = async (query: string) => {
     if (!dbInitialized) {
       toast({
         title: "Database not ready",
         description: "Please wait for the database to initialize",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (!query.trim()) {
@@ -111,72 +84,42 @@ export default function SQLEditor() {
         title: "Empty query",
         description: "Please enter a SQL query to execute",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsExecuting(true)
-
     try {
-      const result = await executeQuery(query)
+      const result = await executeQuery(query);
+
+      if (!result) {
+        toast({
+          title: "Query execution failed",
+          description: "No result returned from the database",
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Add to history
       const newHistoryItem = {
         id: Date.now().toString(),
         query,
         timestamp: Date.now(),
-      }
+      };
 
       if (queryHistory) {
-        const updatedHistory = [newHistoryItem, ...queryHistory].slice(0, 100)
-        setQueryHistory(updatedHistory)
-      }
-        
-      const newLog = {
-        message: result.message,
-        status: result.status,
-        timestamp: Date.now(),
-        duration: result.duration,
-      }
-      setQueryLogs((prev) => [newLog, ...prev].slice(0, 50))
-
-      if (Array.isArray(result.rows) && result.rows.length > 0) {
-        setColumns(Object.keys(result.rows[0]))
-        setResults(result.rows)
-        setActiveTab("results")
-      } else {
-        setColumns([])
-        setResults([])
+        const updatedHistory = [newHistoryItem, ...queryHistory].slice(0, 100);
+        setQueryHistory(updatedHistory);
       }
 
-      setTables(await getTableList())
-
-      toast({
-        title: result.status === "success" ? "Query executed" : "Query failed",
-        description: result.message,
-        variant: result.status === "success" ? "default" : "destructive",
-      })
+      // Switch to results tab on success
+      if (result.status === "success") {
+        setActiveTab("results");
+      }
     } catch (error) {
-      console.error("Query execution error:", error)
-
-      // Add to logs
-      const newLog = {
-        message: (error as Error).message || "An error occurred during query execution",
-        status: "error",
-        timestamp: Date.now(),
-      } as const;
-
-      setQueryLogs((prev) => [newLog, ...prev].slice(0, 50))
-
-      toast({
-        title: "Query failed",
-        description: (error as Error).message || "An error occurred during query execution",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExecuting(false)
+      console.error("Query execution error:", error);
     }
-  }
+  };
 
   const saveQuery = () => {
     if (!queryName.trim()) {
@@ -184,59 +127,59 @@ export default function SQLEditor() {
         title: "Missing name",
         description: "Please provide a name for your query",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     const newSavedQuery = {
       id: Date.now().toString(),
       name: queryName,
       query,
-    }
+    };
 
     if (savedQueries) {
-      const updatedQueries = [...savedQueries, newSavedQuery].slice(0, 50)
-      setSavedQueries(updatedQueries)
+      const updatedQueries = [...savedQueries, newSavedQuery].slice(0, 50);
+      setSavedQueries(updatedQueries);
     }
 
-    setSaveDialogOpen(false)
-    setQueryName("")
+    setSaveDialogOpen(false);
+    setQueryName("");
 
     toast({
       title: "Query saved",
       description: `"${queryName}" has been saved successfully`,
-    })
-  }
+    });
+  };
 
   const loadQuery = (savedQuery: SavedQuery) => {
-    setQuery(savedQuery.query)
-    setActiveTab("editor")
+    setQuery(savedQuery.query);
+    setActiveTab("editor");
 
     toast({
       title: "Query loaded",
       description: `"${savedQuery.name}" has been loaded into the editor`,
-    })
-  }
+    });
+  };
 
   const loadHistoryQuery = (historyItem: HistoryItem) => {
-    setQuery(historyItem.query)
-    setActiveTab("editor")
+    setQuery(historyItem.query);
+    setActiveTab("editor");
 
     toast({
       title: "Query loaded from history",
       description: "Historical query has been loaded into the editor",
-    })
-  }
+    });
+  };
 
   const deleteQuery = (id: string) => {
-    const updatedQueries = savedQueries?.filter((q) => q.id !== id) || []
-    setSavedQueries(updatedQueries)
+    const updatedQueries = savedQueries?.filter((q) => q.id !== id) || [];
+    setSavedQueries(updatedQueries);
 
     toast({
       title: "Query deleted",
       description: "The saved query has been deleted",
-    })
-  }
+    });
+  };
 
   const exportResults = () => {
     if (results.length === 0) {
@@ -244,150 +187,100 @@ export default function SQLEditor() {
         title: "No results to export",
         description: "Execute a query first to export results",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     try {
-      console.log(results)
-      const csv = [
-        columns.join(","),
-        ...results.map((row) => columns.map((col) => JSON.stringify(row[col] || "")).join(",")),
-      ].join("\n")
-
-      const blob = new Blob([csv], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `query-results-${new Date().toISOString().slice(0, 19)}.csv`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-
+      exportResultsToCSV(
+        results,
+        `query-results-${new Date().toISOString().slice(0, 19)}.csv`
+      );
       toast({
         title: "Export successful",
         description: "Results have been exported as CSV",
-      })
+      });
     } catch (error) {
-      console.error("Export error:", error)
+      console.error("Export error:", error);
       toast({
         title: "Export failed",
         description: "Could not export results",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      setCopySuccess(true)
-      setTimeout(() => setCopySuccess(false), 2000)
-    })
-  }
-
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString()
-  }
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    });
+  };
 
   return (
-    <div className="flex flex-col h-screen bg-[#111827]">
-      {/* Header */}
-      <header className="border-b border-[#2D3748] px-6 py-3 flex items-center justify-between bg-[#1A202C]">
-        <div className="flex items-center gap-2">
-          <Database className="h-5 w-5 text-[#10B981]" />
-          <h1 className="text-xl font-bold text-white">Postgres Editor</h1>
+    <div className="flex h-screen bg-[#111827]">
+      <div className="w-64 h-full border-r border-[#2D3748] bg-[#1A202C] flex flex-col shrink-0">
+        <div className="px-4 py-3 border-b border-[#2D3748]">
+          <div className="flex items-center gap-2">
+            <Database
+              className={`h-5 w-5 ${
+                dbInitialized ? "text-[#10B981]" : "text-[#EF4444]"
+              }`}
+            />
+            <h2 className="font-semibold text-[#E2E8F0]">Postgres Editor</h2>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSaveDialogOpen(true)}
-                  disabled={!query.trim() || isExecuting}
-                  className="border-[#4A5568] bg-[#2D3748] hover:bg-[#374151] text-white"
-                >
-                  <Save className="h-4 w-4 mr-2 text-[#A0AEC0]" />
-                  Save
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Save current query</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
 
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  onClick={runQuery}
-                  disabled={!dbInitialized || isExecuting || !query.trim()}
-                  className="bg-[#10B981] hover:bg-[#059669] text-white"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Run
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Execute query</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-64 min-w-64 flex-shrink-0 border-r border-[#2D3748] bg-[#1E293B] flex flex-col">
-          {/* Database Section */}
-          <div className="p-4">
-            <h2 className="text-sm font-semibold text-[#E2E8F0] mb-2">Database</h2>
-            <div className="space-y-1">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-between text-[#E2E8F0] hover:bg-[#2D3748]">
-                    Tables
-                    <ChevronDown className="h-4 w-4 opacity-50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56 bg-[#1A202C] border-[#2D3748]">
-                  {tables.map((table) => (
-                    <DropdownMenuItem
-                      key={table}
-                      onClick={() => setQuery(`SELECT * FROM ${table} LIMIT 100`)}
-                      className="text-[#E2E8F0] focus:bg-[#2D3748] focus:text-white"
-                    >
-                      <TableIcon className="h-4 w-4 mr-2 text-[#10B981]" />
-                      {table}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+        <div className="p-3">
+          <div className="flex items-center text-[#A0AEC0] text-xs font-medium mb-2">
+            <Database className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span>Database</span>
           </div>
 
-          <Separator className="bg-[#2D3748]" />
+          <div className="space-y-1 mb-2">
+            {tables.map((table) => (
+              <Button
+                key={table}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-[#E2E8F0] hover:bg-[#2D3748] h-8"
+                onClick={() => setQuery(`SELECT * FROM ${table} LIMIT 100`)}
+              >
+                <TableIcon className="h-4 w-4 mr-2 text-[#10B981] flex-shrink-0" />
+                <span className="truncate">{table}</span>
+              </Button>
+            ))}
+          </div>
+        </div>
 
-          {/* Saved Queries & History */}
+        <Separator className="bg-[#2D3748] my-2" />
+
+        <div className="flex-1 flex flex-col px-2 overflow-hidden">
           <Tabs defaultValue="saved" className="flex-1 flex flex-col">
-            <TabsList className="grid grid-cols-2 mx-4 mt-4 bg-[#2D3748]">
-              <TabsTrigger value="saved" className="data-[state=active]:bg-[#374151] data-[state=active]:text-white">
-                <Bookmark className="h-4 w-4 mr-2" />
-                Saved
+            <TabsList className="grid grid-cols-2 bg-[#2D3748]">
+              <TabsTrigger
+                value="saved"
+                className="data-[state=active]:bg-[#374151] data-[state=active]:text-white"
+              >
+                <Bookmark className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">Saved</span>
               </TabsTrigger>
-              <TabsTrigger value="history" className="data-[state=active]:bg-[#374151] data-[state=active]:text-white">
-                <Clock className="h-4 w-4 mr-2" />
-                History
+              <TabsTrigger
+                value="history"
+                className="data-[state=active]:bg-[#374151] data-[state=active]:text-white"
+              >
+                <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span className="truncate">History</span>
               </TabsTrigger>
             </TabsList>
 
-            {/* Saved Queries Tab */}
-            <TabsContent value="saved" className="flex-1 p-0">
-              <ScrollArea className="h-full">
-                <div className="p-4 space-y-2">
+            <TabsContent value="saved" className="flex-1 mt-2">
+              <ScrollArea className="h-[calc(100vh-240px)]">
+                <div className="space-y-2 pr-2">
                   {(savedQueries ?? []).length === 0 ? (
-                    <p className="text-sm text-[#A0AEC0] p-2">No saved queries yet</p>
+                    <p className="text-sm text-[#A0AEC0] p-2">
+                      No saved queries yet
+                    </p>
                   ) : (
                     (savedQueries ?? []).map((savedQuery) => (
                       <div
@@ -401,32 +294,28 @@ export default function SQLEditor() {
                           >
                             {savedQuery.name}
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 text-[#A0AEC0] hover:text-white hover:bg-[#374151]"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                                <span className="sr-only">Menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-[#1A202C] border-[#2D3748]">
-                              <DropdownMenuItem
-                                onClick={() => loadQuery(savedQuery)}
-                                className="text-[#E2E8F0] focus:bg-[#2D3748] focus:text-white"
-                              >
-                                Load
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => deleteQuery(savedQuery.id)}
-                                className="text-[#E2E8F0] focus:bg-[#2D3748] focus:text-white"
-                              >
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-[#A0AEC0] hover:text-white hover:bg-[#374151] flex-shrink-0"
+                            onClick={() => deleteQuery(savedQuery.id)}
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M3 6h18"></path>
+                              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                            </svg>
+                            <span className="sr-only">Delete</span>
+                          </Button>
                         </div>
                         <p className="text-xs text-[#A0AEC0] truncate mt-1">
                           {savedQuery.query.substring(0, 50)}
@@ -439,12 +328,13 @@ export default function SQLEditor() {
               </ScrollArea>
             </TabsContent>
 
-            {/* History Tab */}
-            <TabsContent value="history" className="flex-1 p-0">
-              <ScrollArea className="h-full">
-                <div className="p-4 space-y-2">
+            <TabsContent value="history" className="flex-1 mt-2">
+              <ScrollArea className="h-[calc(100vh-240px)]">
+                <div className="space-y-2 pr-2">
                   {(queryHistory ?? []).length === 0 ? (
-                    <p className="text-sm text-[#A0AEC0] p-2">No query history yet</p>
+                    <p className="text-sm text-[#A0AEC0] p-2">
+                      No query history yet
+                    </p>
                   ) : (
                     (queryHistory ?? []).map((historyItem) => (
                       <div
@@ -452,11 +342,11 @@ export default function SQLEditor() {
                         className="rounded-md border border-[#2D3748] p-2 hover:bg-[#2D3748] cursor-pointer"
                         onClick={() => loadHistoryQuery(historyItem)}
                       >
-                        <p className="text-xs text-[#A0AEC0]">{new Date(historyItem.timestamp).toLocaleString()}</p>
-                        <p className="text-xs truncate mt-1 text-[#E2E8F0] overflow-ellipsis overflow-x-scroll max-w-28">
+                        <p className="text-xs text-[#A0AEC0] truncate">
+                          {new Date(historyItem.timestamp).toLocaleString()}
+                        </p>
+                        <p className="text-xs truncate mt-1 text-[#E2E8F0]">
                           {historyItem.query}
-                          {/* {historyItem.query.substring(0, 30)}
-                          {historyItem.query.length > 30 ? "..." : ""} */}
                         </p>
                       </div>
                     ))
@@ -467,13 +357,34 @@ export default function SQLEditor() {
           </Tabs>
         </div>
 
-        {/* Main Editor & Results Area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-            {/* Tab Navigation */}
+        <div className="p-3 border-t border-[#2D3748]">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start text-[#E2E8F0] bg-[#2D3748] h-8"
+            onClick={() => setSaveDialogOpen(true)}
+          >
+            <Bookmark className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="truncate">Save Query</span>
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header query={query} onRunQuery={runQuery} />
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="flex-1 flex flex-col"
+          >
             <div className="flex justify-between items-center px-4 pt-4">
               <TabsList className="bg-[#2D3748]">
-                <TabsTrigger value="editor" className="data-[state=active]:bg-[#374151] data-[state=active]:text-white">
+                <TabsTrigger
+                  value="editor"
+                  className="data-[state=active]:bg-[#374151] data-[state=active]:text-white"
+                >
                   <FileText className="h-4 w-4 mr-2" />
                   Editor
                 </TabsTrigger>
@@ -481,26 +392,29 @@ export default function SQLEditor() {
                   value="results"
                   className="data-[state=active]:bg-[#374151] data-[state=active]:text-white"
                 >
-                  <TableIcon className="h-4 w-4 mr-2" />
                   Results {results.length > 0 && `(${results.length})`}
                 </TabsTrigger>
               </TabsList>
 
-              {/* Results View Options */}
               {activeTab === "results" && results.length > 0 && (
                 <div className="flex items-center gap-2">
                   <TabsList className="bg-[#2D3748]">
                     <TabsTrigger
                       value="table"
                       onClick={() => setResultsTab("table")}
-                      className={`${resultsTab === "table" ? "bg-[#374151] text-white" : ""}`}
+                      className={`${
+                        resultsTab === "table" ? "bg-[#374151] text-white" : ""
+                      }`}
                     >
                       Table
                     </TabsTrigger>
                     <TabsTrigger
                       value="json"
+                      disabled={true}
                       onClick={() => setResultsTab("json")}
-                      className={`${resultsTab === "json" ? "bg-[#374151] text-white" : ""}`}
+                      className={`${
+                        resultsTab === "json" ? "bg-[#374151] text-white" : ""
+                      }`}
                     >
                       JSON
                     </TabsTrigger>
@@ -519,14 +433,21 @@ export default function SQLEditor() {
               )}
             </div>
 
-            {/* Editor Tab */}
-            <TabsContent value="editor" className="flex-1 p-4 pt-2">
-              <div className="h-full border border-[#2D3748] rounded-md mt-2 overflow-hidden relative">
-                <Editor value={query} onChange={setQuery} language="sql" readOnly={isExecuting} />
+            <TabsContent
+              value="editor"
+              className="flex-1 p-4 pt-2 overflow-hidden"
+            >
+              <div className="h-full border border-[#2D3748] rounded-md mt-2 overflow-hidden">
+                <Editor
+                  value={query}
+                  onChange={setQuery}
+                  language="sql"
+                  readOnly={isExecuting}
+                  onExecuteQuery={runQuery}
+                />
               </div>
             </TabsContent>
 
-            {/* Results Tab */}
             <TabsContent value="results" className="flex-1 p-4 pt-2">
               {results.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-[#A0AEC0]">
@@ -546,7 +467,9 @@ export default function SQLEditor() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => copyToClipboard(JSON.stringify(results, null, 2))}
+                        onClick={() =>
+                          copyToClipboard(JSON.stringify(results, null, 2))
+                        }
                         className="absolute top-2 right-2 h-8 w-8 p-0 bg-[#2D3748] hover:bg-[#374151]"
                       >
                         {copySuccess ? (
@@ -563,52 +486,10 @@ export default function SQLEditor() {
             </TabsContent>
           </Tabs>
 
-          {/* Output Logs */}
-          <div className="border-t border-[#2D3748] bg-[#1A202C]">
-            <div className="px-4 py-2 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-[#E2E8F0] flex items-center">
-                <Terminal className="h-4 w-4 mr-2 text-[#A0AEC0]" />
-                Output Logs
-              </h3>
-              {queryLogs.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setQueryLogs([])}
-                  className="h-7 text-xs text-[#A0AEC0] hover:text-white hover:bg-[#2D3748]"
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-            <ScrollArea className="h-32">
-              <div className="p-2 space-y-1">
-                {queryLogs.length === 0 ? (
-                  <p className="text-xs text-[#A0AEC0] p-2">No logs yet. Execute a query to see output.</p>
-                ) : (
-                  queryLogs.map((log, index) => (
-                    <div key={index} className="text-xs p-2 rounded bg-[#1E293B] border border-[#2D3748]">
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant={log.status === "success" ? "default" : "destructive"}
-                          className={log.status === "success" ? "bg-[#10B981]" : "bg-[#EF4444]"}
-                        >
-                          {log.status === "success" ? "SUCCESS" : "ERROR"}
-                        </Badge>
-                        <span className="text-[#A0AEC0]">{formatTimestamp(log.timestamp)}</span>
-                      </div>
-                      <p className="mt-1 text-[#E2E8F0]">{log.message}</p>
-                      {log.duration && <p className="mt-1 text-[#A0AEC0]">Execution time: {log.duration}ms</p>}
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </div>
+          <OutputLogs queryLogs={queryLogs} setQueryLogs={setQueryLogs} />
         </div>
       </div>
 
-      {/* Save Query Dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent className="bg-[#1A202C] border-[#2D3748] text-white">
           <DialogHeader>
@@ -636,7 +517,10 @@ export default function SQLEditor() {
             >
               Cancel
             </Button>
-            <Button onClick={saveQuery} className="bg-[#10B981] hover:bg-[#059669] text-white">
+            <Button
+              onClick={saveQuery}
+              className="bg-[#10B981] hover:bg-[#059669] text-white"
+            >
               Save
             </Button>
           </DialogFooter>
@@ -645,6 +529,5 @@ export default function SQLEditor() {
 
       <Toaster />
     </div>
-  )
+  );
 }
-
