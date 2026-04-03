@@ -15,7 +15,6 @@ export function QueryEditor({ onExecute }: QueryEditorProps) {
 
   const { tabs, activeTabId, updateSQL } = useEditorStore();
   const tables = useDatabaseStore((s) => s.tables);
-  const isExecuting = useEditorStore(() => false); // placeholder, actual from results
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const onExecuteRef = useRef(onExecute);
